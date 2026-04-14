@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Logistics & Route Optimization System</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#060a14;--surface:#0c1220;--surface2:#111c2e;--surface3:#0a1628;
+  --accent:#00e5ff;--accent2:#0097a7;--green:#00e676;--warn:#ffab00;
+  --red:#ff5252;--purple:#ce93d8;--orange:#ff9800;
+  --text:#e8f4fd;--muted:#5c7a99;--border:rgba(0,229,255,0.12);
+  --font-head:'Orbitron',monospace;--font-body:'Exo 2',sans-serif;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);min-height:100vh;overflow-x:hidden}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:var(--surface)}
+::-webkit-scrollbar-thumb{background:var(--accent2);border-radius:3px}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,229,255,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,0.025) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;z-index:0}
+
+/* ── HEADER ── */
+header{position:sticky;top:0;z-index:2000;background:rgba(6,10,20,0.97);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:58px;backdrop-filter:blur(8px)}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{width:34px;height:34px;background:linear-gradient(135deg,rgba(0,229,255,0.2),rgba(0,229,255,0.05));border:1px solid rgba(0,229,255,0.4);border-radius:8px;display:flex;align-items:center;justify-content:center}
+.logo-icon svg{width:18px;height:18px}
+.logo h1{font-family:var(--font-head);font-size:14px;font-weight:700;color:var(--accent);letter-spacing:2px}
+.logo span{font-size:10px;color:var(--muted);letter-spacing:1px}
+.header-right{display:flex;align-items:center;gap:14px}
+.live-badge{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--green);letter-spacing:1px}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:blink 1.2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+#last-update{font-size:11px;color:var(--muted)}
+.btn-sm{background:none;border:1px solid var(--border);color:var(--accent);padding:5px 13px;border-radius:6px;font-size:11px;cursor:pointer;font-family:var(--font-body);letter-spacing:1px;transition:all 0.2s}
+.btn-sm:hover{background:rgba(0,229,255,0.08);border-color:var(--accent)}
+
+/* ── TABS ── */
+nav{display:flex;gap:2px;padding:0 24px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:58px;z-index:1999;backdrop-filter:blur(8px);overflow-x:auto}
+.tab{padding:13px 16px;font-size:12px;font-family:var(--font-body);color:var(--muted);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;letter-spacing:0.5px;transition:all 0.2s;white-space:nowrap}
+.tab:hover{color:var(--text)}.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* ── MAIN ── */
+main{padding:20px 24px;position:relative;z-index:1;max-width:1800px;margin:0 auto}
+.page{display:none}.page.active{display:block}
+
+/* ── KPI CARDS ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px}
+.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;position:relative;overflow:hidden;animation:fadeUp 0.4s ease both}
+.kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.kpi-card.blue::before{background:var(--accent)}.kpi-card.green::before{background:var(--green)}
+.kpi-card.warn::before{background:var(--warn)}.kpi-card.red::before{background:var(--red)}
+.kpi-label{font-size:9px;color:var(--muted);letter-spacing:1.2px;margin-bottom:7px}
+.kpi-val{font-family:var(--font-head);font-size:24px;font-weight:700;line-height:1;color:var(--text)}
+.kpi-sub{font-size:10px;color:var(--muted);margin-top:4px}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── PANELS ── */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:16px}
+.panel-title{font-family:var(--font-head);font-size:10px;font-weight:700;color:var(--accent);letter-spacing:2px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+
+/* ── GRIDS ── */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px}
+@media(max-width:1100px){.grid-2,.grid-3{grid-template-columns:1fr}}
+
+/* ── MAP CONTAINERS ── */
+.map-wrap{width:100%;border-radius:10px;border:1px solid var(--border);overflow:hidden;background:#0d1117}
+#map-dashboard{height:440px}
+#map-optimizer{height:560px}
+#map-tracker{height:500px}
+#map-traffic{height:460px}
+
+/* Leaflet dark overrides */
+.leaflet-container{background:#0d1117!important}
+.leaflet-control-zoom{border:1px solid var(--border)!important;border-radius:8px!important;overflow:hidden}
+.leaflet-control-zoom a{background:var(--surface2)!important;color:var(--text)!important;border-color:var(--border)!important;font-size:16px!important;line-height:26px!important}
+.leaflet-control-zoom a:hover{background:rgba(0,229,255,0.1)!important;color:var(--accent)!important}
+.leaflet-control-attribution{background:rgba(6,10,20,0.85)!important;color:var(--muted)!important;font-size:9px!important}
+.leaflet-control-attribution a{color:var(--accent)!important}
+.leaflet-popup-content-wrapper{background:var(--surface2)!important;border:1px solid var(--border)!important;border-radius:10px!important;color:var(--text)!important;box-shadow:0 4px 24px rgba(0,0,0,0.6)!important}
+.leaflet-popup-tip{background:var(--surface2)!important}
+.leaflet-routing-container{display:none!important}
+.leaflet-tooltip{background:var(--surface2)!important;border:1px solid var(--border)!important;color:var(--text)!important;border-radius:8px!important;padding:6px 10px!important;font-family:var(--font-body)!important;font-size:12px!important;box-shadow:0 2px 12px rgba(0,0,0,0.4)!important}
+.leaflet-tooltip-left::before,.leaflet-tooltip-right::before{display:none}
+
+/* ── OPTIMIZER LAYOUT ── */
+.optimizer-layout{display:grid;grid-template-columns:320px 1fr;gap:16px}
+@media(max-width:1100px){.optimizer-layout{grid-template-columns:1fr}}
+
+.form-group{margin-bottom:12px}
+.form-group label{font-size:9px;color:var(--muted);letter-spacing:1.2px;display:block;margin-bottom:5px}
+.form-group input[type=text],.form-group select{width:100%;background:var(--surface2);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:9px 13px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;transition:border-color 0.2s}
+.form-group input[type=text]:focus,.form-group select:focus{border-color:rgba(0,229,255,0.45)}
+.form-group select option{background:var(--surface2)}
+
+.input-pos{position:relative}
+.suggestions{position:absolute;z-index:3000;background:var(--surface2);border:1px solid var(--border);border-radius:8px;width:100%;margin-top:2px;max-height:190px;overflow-y:auto;display:none;box-shadow:0 8px 24px rgba(0,0,0,0.5)}
+.suggestion-item{padding:9px 14px;font-size:12px;cursor:pointer;color:var(--text);border-bottom:1px solid rgba(255,255,255,0.04);transition:background 0.15s;display:flex;align-items:center;gap:8px}
+.suggestion-item:hover{background:rgba(0,229,255,0.08);color:var(--accent)}
+.suggestion-item:last-child{border-bottom:none}
+
+.toggle-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
+.toggle-row label{font-size:11px;color:var(--muted)}
+.toggle{position:relative;width:36px;height:18px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.slider-t{position:absolute;inset:0;background:var(--surface2);border-radius:20px;cursor:pointer;transition:0.3s;border:1px solid rgba(255,255,255,0.1)}
+.slider-t::before{content:'';position:absolute;height:12px;width:12px;left:2px;bottom:2px;background:var(--muted);border-radius:50%;transition:0.3s}
+input:checked+.slider-t{background:rgba(0,229,255,0.25);border-color:rgba(0,229,255,0.4)}
+input:checked+.slider-t::before{transform:translateX(18px);background:var(--accent)}
+
+.btn-optimize{width:100%;background:linear-gradient(135deg,#00e5ff,#0097a7);color:#000;border:none;border-radius:10px;padding:12px;font-family:var(--font-head);font-size:12px;font-weight:700;letter-spacing:2px;cursor:pointer;transition:opacity 0.2s;margin-bottom:4px}
+.btn-optimize:hover{opacity:0.88}.btn-optimize:disabled{opacity:0.4;cursor:not-allowed}
+
+/* Route cards */
+.route-cards{display:flex;flex-direction:column;gap:7px;margin-top:10px}
+.rcard{background:var(--surface2);border:2px solid rgba(255,255,255,0.06);border-radius:10px;padding:11px 13px;cursor:pointer;transition:all 0.25s;display:flex;align-items:center;gap:11px}
+.rcard:hover{border-color:rgba(255,255,255,0.2);transform:translateX(2px)}
+.rcard.best{border-color:#1a73e8;background:rgba(26,115,232,0.1)}
+.rcard.alt1{border-color:rgba(255,152,0,0.5);background:rgba(255,152,0,0.06)}
+.rcard.alt2{border-color:rgba(206,147,216,0.5);background:rgba(206,147,216,0.06)}
+.rcard.alt3{border-color:rgba(76,175,80,0.5);background:rgba(76,175,80,0.06)}
+.rcdot{width:14px;height:14px;border-radius:50%;flex-shrink:0;border:2px solid rgba(255,255,255,0.3)}
+.rc-info{flex:1}
+.rc-label{font-size:12px;font-weight:600;color:var(--text);margin-bottom:3px}
+.rc-stats{font-size:10px;color:var(--muted)}
+.rc-time{font-family:var(--font-head);font-size:15px;font-weight:700;text-align:right}
+.best-tag{display:block;font-size:9px;background:rgba(26,115,232,0.25);color:#6ab0ff;padding:2px 7px;border-radius:20px;border:1px solid rgba(26,115,232,0.5);letter-spacing:1px;margin-top:3px;text-align:center}
+.traffic-warn-tag{display:block;font-size:9px;background:rgba(255,82,82,0.15);color:#ff8a80;padding:2px 7px;border-radius:20px;border:1px solid rgba(255,82,82,0.4);letter-spacing:1px;margin-top:3px;text-align:center}
+
+.result-box{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:13px;margin-top:10px}
+.rr{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.035)}
+.rr:last-child{border-bottom:none}
+.rk{font-size:10px;color:var(--muted)}.rv{font-size:12px;font-weight:500;color:var(--text)}
+.rv.ac{color:var(--accent)}.rv.gr{color:var(--green)}.rv.rd{color:var(--red)}
+
+.step-chips{display:flex;flex-direction:column;gap:4px;margin-top:10px;max-height:180px;overflow-y:auto}
+.step-chip{background:rgba(0,229,255,0.04);border-left:2px solid var(--accent);padding:5px 10px;font-size:11px;color:var(--muted);border-radius:0 6px 6px 0;line-height:1.4}
+
+/* ── VEHICLE TRACKER ── */
+.tracker-layout{display:grid;grid-template-columns:300px 1fr;gap:16px}
+@media(max-width:1100px){.tracker-layout{grid-template-columns:1fr}}
+.vehicle-list{display:flex;flex-direction:column;gap:8px;max-height:500px;overflow-y:auto}
+.v-item{background:var(--surface2);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:12px 14px;cursor:pointer;transition:all 0.2s}
+.v-item:hover,.v-item.active{border-color:var(--accent);background:rgba(0,229,255,0.06)}
+.v-item-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.v-id{font-family:var(--font-head);font-size:12px;color:var(--accent)}
+.v-type{font-size:10px;color:var(--muted)}
+.v-loc{font-size:11px;color:var(--text);margin-bottom:4px}
+.v-speed{font-size:11px;color:var(--muted)}
+.v-progress{height:4px;background:var(--surface);border-radius:2px;overflow:hidden;margin-top:6px}
+.v-progress-bar{height:100%;border-radius:2px;transition:width 0.5s;background:var(--accent)}
+.status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.sd-active{background:var(--green);box-shadow:0 0 6px var(--green)}
+.sd-idle{background:var(--warn)}
+.sd-maintenance{background:var(--red)}
+
+/* Traffic alert banner */
+.traffic-alert{background:rgba(255,82,82,0.1);border:1px solid rgba(255,82,82,0.35);border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:12px;color:#ff8a80;display:flex;align-items:center;gap:8px;animation:pulse-border 2s infinite}
+@keyframes pulse-border{0%,100%{border-color:rgba(255,82,82,0.35)}50%{border-color:rgba(255,82,82,0.8)}}
+
+/* fleet table */
+.fleet-table{width:100%;border-collapse:collapse;font-size:12px}
+.fleet-table th{text-align:left;padding:9px 12px;font-size:9px;color:var(--muted);letter-spacing:1.5px;border-bottom:1px solid var(--border);font-weight:500}
+.fleet-table td{padding:9px 12px;border-bottom:1px solid rgba(255,255,255,0.025)}
+.fleet-table tr:hover td{background:rgba(0,229,255,0.025)}
+.sb{font-size:9px;padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:0.5px}
+.s-active{background:rgba(0,230,118,0.12);color:var(--green);border:1px solid rgba(0,230,118,0.3)}
+.s-idle{background:rgba(255,171,0,0.12);color:var(--warn);border:1px solid rgba(255,171,0,0.3)}
+.s-maintenance{background:rgba(255,82,82,0.12);color:var(--red);border:1px solid rgba(255,82,82,0.3)}
+
+/* demand */
+.demand-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:9px;margin-top:12px}
+.demand-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 13px}
+.demand-city{font-size:12px;font-weight:500;margin-bottom:4px}
+.demand-val{font-family:var(--font-head);font-size:20px;font-weight:700;color:var(--accent)}
+.demand-meta{font-size:10px;color:var(--muted);margin-top:3px;display:flex;justify-content:space-between}
+.trend-up{color:var(--green)}.trend-down{color:var(--red)}.trend-stable{color:var(--warn)}
+
+/* alerts */
+.alerts-list{display:flex;flex-direction:column;gap:7px}
+.alert-item{padding:9px 13px;border-radius:8px;font-size:11px;line-height:1.7}
+.a-danger{background:rgba(255,82,82,0.07);border:1px solid rgba(255,82,82,0.2);color:#ff8a80}
+.a-warn{background:rgba(255,171,0,0.07);border:1px solid rgba(255,171,0,0.2);color:#ffd54f}
+.a-info{background:rgba(0,229,255,0.06);border:1px solid rgba(0,229,255,0.18);color:#80deea}
+
+/* free badge */
+.free-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(0,230,118,0.1);border:1px solid rgba(0,230,118,0.3);color:var(--green);font-size:11px;padding:5px 14px;border-radius:20px;margin-bottom:14px;font-weight:500}
+
+.loading{text-align:center;padding:28px;color:var(--muted);font-size:12px}
+.spinner{width:20px;height:20px;border:2px solid rgba(0,229,255,0.15);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;display:inline-block;vertical-align:middle;margin-right:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Animated vehicle marker pulse */
+@keyframes vehiclePulse{0%{transform:scale(1);opacity:1}50%{transform:scale(1.5);opacity:0.5}100%{transform:scale(1);opacity:1}}
+@keyframes pinBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="#00e5ff" stroke-width="1.5"/><polyline points="9 22 9 12 15 12 15 22" stroke="#00e5ff" stroke-width="1.5"/></svg></div>
+    <div><h1>AI LOGISTICS</h1><span>ROUTE OPTIMIZATION SYSTEM</span></div>
+  </div>
+  <div class="header-right">
+    <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+    <span id="last-update">Loading...</span>
+    <button class="btn-sm" onclick="loadDashboard()">↻ REFRESH</button>
+  </div>
+</header>
+
+<nav>
+  <button class="tab active" onclick="showTab('dashboard',this)">📊 Dashboard</button>
+  <button class="tab" onclick="showTab('optimizer',this)">🗺 Route Optimizer</button>
+  <button class="tab" onclick="showTab('tracker',this)">🚛 Live Vehicle Tracker</button>
+  <button class="tab" onclick="showTab('fleet',this)">📋 Fleet</button>
+  <button class="tab" onclick="showTab('demand',this)">📈 Demand Forecast</button>
+  <button class="tab" onclick="showTab('traffic',this)">🚦 Traffic Monitor</button>
+</nav>
+
+<main>
+
+<!-- ════════ DASHBOARD ════════ -->
+<div id="page-dashboard" class="page active">
+  <div class="free-badge">✅ 100% FREE — OpenStreetMap + OSRM + Leaflet.js — No API Key Required</div>
+  <div class="kpi-grid" id="kpi-grid"><div class="loading"><span class="spinner"></span>Loading KPIs...</div></div>
+  <div class="grid-2">
+    <div class="panel"><div class="panel-title">📈 DELIVERY TREND — 14 DAYS</div><div style="position:relative;height:190px"><canvas id="chart-deliveries"></canvas></div></div>
+    <div class="panel"><div class="panel-title">💰 COST vs FUEL EFFICIENCY</div><div style="position:relative;height:190px"><canvas id="chart-cost"></canvas></div></div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">🗺 LIVE LOGISTICS NETWORK — ALL INDIA</div>
+    <div class="map-wrap"><div id="map-dashboard"></div></div>
+    <div style="display:flex;gap:14px;margin-top:10px;flex-wrap:wrap;font-size:11px;color:var(--muted)">
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#00e5ff;display:inline-block"></span>West</span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#00e676;display:inline-block"></span>North</span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#ffab00;display:inline-block"></span>South</span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#ce93d8;display:inline-block"></span>East</span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#ff5252;display:inline-block"></span>Central</span>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-title">⚠ SYSTEM ALERTS</div>
+      <div class="alerts-list">
+        <div class="alert-item a-danger">🔴 Heavy traffic on Mumbai–Nagpur corridor. Rerouting 3 vehicles automatically.</div>
+        <div class="alert-item a-warn">🟡 Vehicle VH-1004 fuel below 25% — nearest depot: Pune (48 km).</div>
+        <div class="alert-item a-warn">🟡 Demand surge predicted in Delhi tomorrow (+38%). Pre-position stock advised.</div>
+        <div class="alert-item a-info">🔵 A* AI algorithm saved 14.2% distance vs standard routing today.</div>
+        <div class="alert-item a-info">🔵 Fleet utilization at 84% — optimal efficiency range achieved.</div>
+      </div>
+    </div>
+    <div class="panel"><div class="panel-title">ZONE DISTRIBUTION</div><div style="position:relative;height:195px"><canvas id="chart-zone"></canvas></div></div>
+  </div>
+</div>
+
+<!-- ════════ ROUTE OPTIMIZER ════════ -->
+<div id="page-optimizer" class="page">
+  <div class="optimizer-layout">
+    <div>
+      <div class="panel">
+        <div class="panel-title">🔧 ROUTE PARAMETERS</div>
+        <div class="form-group">
+          <label>ORIGIN CITY</label>
+          <div class="input-pos">
+            <input type="text" id="opt-origin" placeholder="e.g. Mumbai, Delhi, Pune..." oninput="suggestCities('origin',this.value)" autocomplete="off">
+            <div class="suggestions" id="sugg-origin"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>DESTINATION CITY</label>
+          <div class="input-pos">
+            <input type="text" id="opt-dest" placeholder="e.g. Bangalore, Chennai..." oninput="suggestCities('dest',this.value)" autocomplete="off">
+            <div class="suggestions" id="sugg-dest"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>AI ALGORITHM</label>
+          <select id="opt-algo">
+            <option value="astar">A* — AI Heuristic (Fastest)</option>
+            <option value="dijkstra">Dijkstra — Classic Shortest</option>
+          </select>
+        </div>
+        <div class="toggle-row">
+          <label>Show Multiple Route Alternatives</label>
+          <label class="toggle"><input type="checkbox" id="opt-alts" checked><span class="slider-t"></span></label>
+        </div>
+        <div class="toggle-row">
+          <label>Show Real-Time Traffic Layer</label>
+          <label class="toggle"><input type="checkbox" id="opt-traffic" checked><span class="slider-t"></span></label>
+        </div>
+        <button class="btn-optimize" id="btn-opt" onclick="runOptimize()">OPTIMIZE ROUTE →</button>
+
+        <div id="traffic-alert-box" style="display:none" class="traffic-alert">
+          🚨 <span id="traffic-alert-msg">Traffic detected on selected route</span>
+        </div>
+
+        <div id="route-cards-wrap" style="display:none">
+          <div style="font-size:9px;color:var(--muted);letter-spacing:1px;margin:12px 0 7px">ROUTE OPTIONS — click any to select</div>
+          <div class="route-cards" id="route-cards"></div>
+        </div>
+
+        <div id="opt-result" style="display:none">
+          <div class="result-box">
+            <div class="rr"><span class="rk">Algorithm</span><span class="rv ac" id="res-algo">—</span></div>
+            <div class="rr"><span class="rk">Best Route Distance</span><span class="rv" id="res-dist">—</span></div>
+            <div class="rr"><span class="rk">Estimated Travel Time</span><span class="rv ac" id="res-time">—</span></div>
+            <div class="rr"><span class="rk">Routes Found</span><span class="rv gr" id="res-nroutes">—</span></div>
+            <div class="rr"><span class="rk">Traffic Status</span><span class="rv" id="res-traffic-status">—</span></div>
+          </div>
+          <div style="font-size:9px;color:var(--muted);letter-spacing:1px;margin:10px 0 5px">TURN-BY-TURN STEPS</div>
+          <div class="step-chips" id="res-steps"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="padding:16px">
+      <div class="panel-title">🗺 REAL MAP — MULTIPLE ROUTES + LIVE TRAFFIC OVERLAY</div>
+      <div id="traffic-legend" style="display:flex;gap:14px;margin-bottom:10px;flex-wrap:wrap;font-size:11px;color:var(--muted)">
+        <span style="display:flex;align-items:center;gap:5px"><span style="width:22px;height:4px;background:#1a73e8;border-radius:2px;display:inline-block"></span>Best route</span>
+        <span style="display:flex;align-items:center;gap:5px"><span style="width:22px;height:4px;background:#ff9800;border-radius:2px;display:inline-block"></span>Alternate 1</span>
+        <span style="display:flex;align-items:center;gap:5px"><span style="width:22px;height:4px;background:#ce93d8;border-radius:2px;display:inline-block"></span>Alternate 2</span>
+        <span style="display:flex;align-items:center;gap:5px"><span style="width:22px;height:4px;background:#4caf50;border-radius:2px;display:inline-block"></span>Alternate 3</span>
+        <span style="display:flex;align-items:center;gap:5px"><span style="width:22px;height:4px;background:#ff5252;border-radius:2px;display:inline-block;border-top:3px dashed #ff5252;background:none"></span>Traffic jam</span>
+      </div>
+      <div class="map-wrap"><div id="map-optimizer"></div></div>
+      <div id="opt-hint" style="text-align:center;color:var(--muted);font-size:11px;margin-top:10px;line-height:2">
+        Enter origin &amp; destination → click <strong style="color:var(--accent)">Optimize Route</strong><br>
+        <b style="color:#1a73e8">━━━━</b> Best route (thick blue) &nbsp;
+        <b style="color:#ff9800">━━━━</b> Alternate 1 (orange) &nbsp;
+        <b style="color:#ce93d8">━━━━</b> Alternate 2 (purple)<br>
+        Red dashed lines = simulated traffic congestion zones — click alternate route to avoid
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ LIVE VEHICLE TRACKER ════════ -->
+<div id="page-tracker" class="page">
+  <div class="tracker-layout">
+    <div>
+      <div class="panel">
+        <div class="panel-title">🚛 ACTIVE VEHICLES</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Click any vehicle to track it on the map in real time</div>
+        <div class="vehicle-list" id="vehicle-list"><div class="loading"><span class="spinner"></span>Loading vehicles...</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">📊 SELECTED VEHICLE STATS</div>
+        <div id="vehicle-stats">
+          <div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">Select a vehicle from the list above to see its live stats</div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="padding:16px">
+      <div class="panel-title">🗺 LIVE VEHICLE TRACKING MAP — REAL-TIME MOVEMENT</div>
+      <div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+        <div id="tracker-status" style="font-size:11px;color:var(--muted)">No vehicle selected</div>
+        <button id="btn-track-all" onclick="trackAllVehicles()" style="background:none;border:1px solid var(--border);color:var(--accent);padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;margin-left:auto">Track All Vehicles</button>
+        <button id="btn-stop-track" onclick="stopTracking()" style="background:none;border:1px solid rgba(255,82,82,0.4);color:var(--red);padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;display:none">■ Stop</button>
+      </div>
+      <div class="map-wrap"><div id="map-tracker"></div></div>
+      <div style="display:flex;gap:14px;margin-top:10px;flex-wrap:wrap;font-size:11px;color:var(--muted)">
+        <span style="display:flex;align-items:center;gap:5px">
+          <span style="width:14px;height:14px;background:#00e676;border-radius:50%;border:2px solid #fff;display:inline-block"></span>Active — moving
+        </span>
+        <span style="display:flex;align-items:center;gap:5px">
+          <span style="width:14px;height:14px;background:#ffab00;border-radius:50%;border:2px solid #fff;display:inline-block"></span>Idle — parked
+        </span>
+        <span style="display:flex;align-items:center;gap:5px">
+          <span style="width:14px;height:14px;background:#ff5252;border-radius:50%;border:2px solid #fff;display:inline-block"></span>Maintenance
+        </span>
+        <span style="display:flex;align-items:center;gap:5px">
+          <span style="width:30px;height:3px;background:#00e5ff;border-radius:2px;display:inline-block;border-top:2px dashed #00e5ff;background:none"></span>Route path
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ FLEET ════════ -->
+<div id="page-fleet" class="page">
+  <div class="panel"><div class="panel-title">🚛 FLEET STATUS</div><div id="fleet-container"><div class="loading"><span class="spinner"></span>Loading fleet...</div></div></div>
+  <div class="grid-2">
+    <div class="panel"><div class="panel-title">VEHICLE TYPE MIX</div><div style="position:relative;height:210px"><canvas id="chart-fleet-type"></canvas></div></div>
+    <div class="panel"><div class="panel-title">FLEET STATUS BREAKDOWN</div><div style="position:relative;height:210px"><canvas id="chart-fleet-status"></canvas></div></div>
+  </div>
+</div>
+
+<!-- ════════ DEMAND ════════ -->
+<div id="page-demand" class="page">
+  <div class="panel">
+    <div class="panel-title">📈 AI DEMAND FORECAST — ALL CITIES</div>
+    <div style="position:relative;height:270px;margin-bottom:12px"><canvas id="chart-demand-bar"></canvas></div>
+    <div class="demand-grid" id="demand-grid"><div class="loading"><span class="spinner"></span>Forecasting...</div></div>
+  </div>
+</div>
+
+<!-- ════════ TRAFFIC ════════ -->
+<div id="page-traffic" class="page">
+  <div class="panel">
+    <div class="panel-title">🚦 REAL-TIME TRAFFIC MONITORING</div>
+    <div style="display:flex;gap:16px;margin-bottom:10px;flex-wrap:wrap;font-size:11px;color:var(--muted)">
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:22px;height:5px;background:#00e676;border-radius:2px;display:inline-block"></span>Free flow</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:22px;height:5px;background:#ffab00;border-radius:2px;display:inline-block"></span>Moderate</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:22px;height:5px;background:#ff5252;border-radius:2px;display:inline-block"></span>Heavy traffic</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:22px;height:5px;background:#9c27b0;border-radius:2px;display:inline-block"></span>Severe jam</span>
+    </div>
+    <div class="map-wrap"><div id="map-traffic"></div></div>
+    <p style="font-size:11px;color:var(--muted);margin-top:8px">Traffic simulated based on real peak hours (8–10am, 5–8pm). Lines show congestion on major routes.</p>
+  </div>
+  <div class="grid-2">
+    <div class="panel"><div class="panel-title">TRAFFIC LEVEL DISTRIBUTION</div><div style="position:relative;height:220px"><canvas id="chart-traffic-pie"></canvas></div></div>
+    <div class="panel"><div class="panel-title">TOP CONGESTED ROUTES</div><div style="position:relative;height:220px"><canvas id="chart-traffic-bar"></canvas></div></div>
+  </div>
+</div>
+
+</main>
+
+<script>
+/* ═══════════════════════════════════
+   CITY & EDGE DATA
+═══════════════════════════════════ */
+const CITIES = {
+  Mumbai:{lat:19.076,lng:72.877,zone:'west'},Pune:{lat:18.520,lng:73.856,zone:'west'},
+  Nashik:{lat:19.998,lng:73.789,zone:'west'},Surat:{lat:21.170,lng:72.831,zone:'west'},
+  Ahmedabad:{lat:23.023,lng:72.572,zone:'west'},Delhi:{lat:28.613,lng:77.209,zone:'north'},
+  Jaipur:{lat:26.912,lng:75.787,zone:'north'},Lucknow:{lat:26.847,lng:80.947,zone:'north'},
+  Agra:{lat:27.177,lng:78.007,zone:'north'},Chandigarh:{lat:30.733,lng:76.779,zone:'north'},
+  Bangalore:{lat:12.972,lng:77.594,zone:'south'},Chennai:{lat:13.083,lng:80.270,zone:'south'},
+  Hyderabad:{lat:17.385,lng:78.486,zone:'south'},Kochi:{lat:9.931,lng:76.267,zone:'south'},
+  Coimbatore:{lat:11.017,lng:76.956,zone:'south'},Kolkata:{lat:22.572,lng:88.363,zone:'east'},
+  Bhubaneswar:{lat:20.296,lng:85.825,zone:'east'},Patna:{lat:25.611,lng:85.143,zone:'east'},
+  Nagpur:{lat:21.145,lng:79.082,zone:'central'},Indore:{lat:22.719,lng:75.857,zone:'central'}
+};
+const EDGES=[
+  ["Mumbai","Pune",148],["Mumbai","Nashik",167],["Mumbai","Surat",284],["Mumbai","Nagpur",835],
+  ["Pune","Nagpur",590],["Surat","Ahmedabad",265],["Ahmedabad","Jaipur",670],["Ahmedabad","Indore",395],
+  ["Delhi","Jaipur",270],["Delhi","Agra",210],["Delhi","Chandigarh",250],["Delhi","Lucknow",500],
+  ["Jaipur","Agra",235],["Lucknow","Patna",570],["Bangalore","Chennai",346],["Bangalore","Hyderabad",570],
+  ["Bangalore","Kochi",530],["Chennai","Hyderabad",625],["Hyderabad","Nagpur",505],
+  ["Kolkata","Bhubaneswar",440],["Kolkata","Patna",600],["Nagpur","Indore",455]
+];
+const ZONE_COLORS={west:'#00e5ff',north:'#00e676',south:'#ffab00',east:'#ce93d8',central:'#ff5252'};
+const CITY_NAMES=Object.keys(CITIES);
+
+/* Route colors — bold and distinct */
+const ROUTE_CFG=[
+  {color:'#1a73e8', weight:9,  opacity:1.0, label:'⭐ Fastest Route',  cls:'best'},
+  {color:'#ff9800', weight:6,  opacity:0.9, label:'Alternate Route 1', cls:'alt1'},
+  {color:'#ce93d8', weight:6,  opacity:0.9, label:'Alternate Route 2', cls:'alt2'},
+  {color:'#4caf50', weight:6,  opacity:0.9, label:'Alternate Route 3', cls:'alt3'},
+];
+
+/* ═══════════════════════════════════
+   GLOBALS
+═══════════════════════════════════ */
+let dashData={}, charts={};
+let mapDash=null, mapOpt=null, mapTrack=null, mapTraffic=null;
+let activeRouteLayers=[], trafficLayers=[];
+let currentRoutes=[], selectedRouteIdx=0;
+let originLatLng=null, destLatLng=null;
+let vehicleMarkers={}, vehicleRouteLines={}, vehicleAnimations={};
+let trackerInterval=null;
+let selectedVehicle=null;
+
+/* Simulated vehicle fleet with routes between cities */
+const VEHICLE_DATA=[
+  {id:'VH-1001',type:'Truck',status:'active',from:'Mumbai',to:'Delhi',progress:0,speed:65,fuel:72,load:85},
+  {id:'VH-1002',type:'Van',status:'active',from:'Bangalore',to:'Chennai',progress:0,speed:55,fuel:88,load:60},
+  {id:'VH-1003',type:'Truck',status:'active',from:'Delhi',to:'Lucknow',progress:0,speed:70,fuel:45,load:92},
+  {id:'VH-1004',type:'Bike',status:'active',from:'Pune',to:'Mumbai',progress:0,speed:40,fuel:22,load:30},
+  {id:'VH-1005',type:'Van',status:'idle',from:'Hyderabad',to:'Nagpur',progress:0,speed:0,fuel:65,load:0},
+  {id:'VH-1006',type:'Truck',status:'active',from:'Kolkata',to:'Patna',progress:0,speed:60,fuel:80,load:75},
+  {id:'VH-1007',type:'Van',status:'maintenance',from:'Jaipur',to:'Jaipur',progress:0,speed:0,fuel:30,load:0},
+  {id:'VH-1008',type:'Truck',status:'active',from:'Chennai',to:'Kochi',progress:0,speed:58,fuel:90,load:88},
+];
+
+/* ═══════════════════════════════════
+   TAB SWITCH
+═══════════════════════════════════ */
+function showTab(name,el){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  el.classList.add('active');
+  setTimeout(()=>{
+    if(name==='dashboard'&&mapDash) mapDash.invalidateSize();
+    if(name==='optimizer'&&mapOpt)  mapOpt.invalidateSize();
+    if(name==='tracker'&&mapTrack)  mapTrack.invalidateSize();
+    if(name==='traffic'&&mapTraffic)mapTraffic.invalidateSize();
+  },150);
+}
+
+/* ═══════════════════════════════════
+   INIT ALL MAPS
+═══════════════════════════════════ */
+function initMaps(){
+  const tile='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+  const attr='© <a href="https://openstreetmap.org">OpenStreetMap</a>';
+  const c=[20.5,79];
+
+  mapDash=L.map('map-dashboard',{zoomControl:true}).setView(c,5);
+  L.tileLayer(tile,{attribution:attr,maxZoom:19}).addTo(mapDash);
+  plotNetworkOn(mapDash);
+
+  mapOpt=L.map('map-optimizer',{zoomControl:true}).setView(c,5);
+  L.tileLayer(tile,{attribution:attr,maxZoom:19}).addTo(mapOpt);
+
+  mapTrack=L.map('map-tracker',{zoomControl:true}).setView(c,5);
+  L.tileLayer(tile,{attribution:attr,maxZoom:19}).addTo(mapTrack);
+
+  mapTraffic=L.map('map-traffic',{zoomControl:true}).setView(c,5);
+  L.tileLayer(tile,{attribution:attr,maxZoom:19}).addTo(mapTraffic);
+  drawTrafficLayer(mapTraffic);
+}
+
+/* ═══════════════════════════════════
+   NETWORK MAP  (dashboard)
+═══════════════════════════════════ */
+function plotNetworkOn(map){
+  EDGES.forEach(([a,b])=>{
+    const ca=CITIES[a],cb=CITIES[b];
+    L.polyline([[ca.lat,ca.lng],[cb.lat,cb.lng]],{color:'rgba(0,229,255,0.18)',weight:1.5}).addTo(map);
+  });
+  Object.entries(CITIES).forEach(([city,c])=>{
+    const color=ZONE_COLORS[c.zone];
+    const m=L.circleMarker([c.lat,c.lng],{radius:6,fillColor:color,color:'#fff',weight:1.5,opacity:1,fillOpacity:0.9}).addTo(map);
+    const d=dashData.demand?dashData.demand[city]:null;
+    m.bindPopup(`<div style="font-family:'Exo 2',sans-serif">
+      <b style="font-size:14px;color:#e8f4fd">${city}</b><br>
+      <span style="font-size:11px;color:#9aa0a6">Zone: ${c.zone.toUpperCase()}</span><br>
+      ${d?`<span style="font-size:12px;color:#00e5ff">Demand: <b>${d.demand}</b></span><br>
+      <span style="font-size:12px;color:${d.trend==='up'?'#00e676':d.trend==='down'?'#ff5252':'#ffab00'}">${d.trend==='up'?'▲':d.trend==='down'?'▼':'●'} ${d.trend}</span>`:''}
+    </div>`);
+    m.on('mouseover',()=>m.openPopup());
+  });
+}
+
+/* ═══════════════════════════════════
+   TRAFFIC LAYER  (color-coded road lines)
+═══════════════════════════════════ */
+function getTrafficLevel(){
+  const h=new Date().getHours();
+  const isPeak=(h>=8&&h<=10)||(h>=17&&h<=20);
+  return isPeak;
+}
+
+function drawTrafficLayer(map){
+  const isPeak=getTrafficLevel();
+  const trafficColors=['#00e676','#ffab00','#ff5252','#9c27b0'];
+  const trafficLabels=['🟢 Free Flow','🟡 Moderate','🔴 Heavy Traffic','🟣 Severe Jam'];
+
+  EDGES.forEach(([a,b,dist])=>{
+    const ca=CITIES[a],cb=CITIES[b];
+    // Assign traffic based on distance and peak hours + randomness
+    let level=0;
+    if(isPeak){
+      if(dist>600) level=Math.random()<0.4?3:2;
+      else if(dist>300) level=Math.random()<0.5?2:1;
+      else level=Math.random()<0.3?1:0;
+    } else {
+      level=Math.random()<0.2?2:Math.random()<0.4?1:0;
+    }
+    const isCongested=(level>=2);
+    const line=L.polyline([[ca.lat,ca.lng],[cb.lat,cb.lng]],{
+      color:trafficColors[level],
+      weight:isCongested?6:4,
+      opacity:0.85,
+      dashArray:isCongested?'10,5':null,
+    }).addTo(map);
+    line.bindTooltip(`
+      <b>${a} → ${b}</b><br>
+      ${trafficLabels[level]}<br>
+      <span style="color:var(--muted)">${dist} km road</span>`);
+  });
+  plotNetworkOn(map);
+}
+
+/* Draw traffic overlay on optimizer map */
+function drawTrafficOnOptimizer(){
+  trafficLayers.forEach(l=>mapOpt.removeLayer(l));
+  trafficLayers=[];
+  if(!document.getElementById('opt-traffic').checked) return;
+  const isPeak=getTrafficLevel();
+  EDGES.forEach(([a,b,dist])=>{
+    const ca=CITIES[a],cb=CITIES[b];
+    let level=0;
+    if(isPeak){if(dist>600)level=Math.random()<0.4?3:2;else if(dist>300)level=Math.random()<0.5?2:1;else level=Math.random()<0.3?1:0;}
+    else{level=Math.random()<0.2?2:Math.random()<0.4?1:0;}
+    if(level>=2){
+      const congLine=L.polyline([[ca.lat,ca.lng],[cb.lat,cb.lng]],{
+        color:'#ff5252',weight:4,opacity:0.7,dashArray:'8,6'
+      }).addTo(mapOpt);
+      congLine.bindTooltip(`🚨 <b>Traffic Jam: ${a}→${b}</b><br>Avoid this segment`);
+      trafficLayers.push(congLine);
+    }
+  });
+}
+
+/* ═══════════════════════════════════
+   CITY SUGGESTIONS
+═══════════════════════════════════ */
+function suggestCities(which,val){
+  const sugg=document.getElementById('sugg-'+which);
+  if(!val||val.length<1){sugg.style.display='none';return;}
+  const matches=CITY_NAMES.filter(c=>c.toLowerCase().includes(val.toLowerCase()));
+  if(!matches.length){sugg.style.display='none';return;}
+  sugg.innerHTML=matches.slice(0,8).map(c=>`
+    <div class="suggestion-item" onclick="selectCity('${which}','${c}')">
+      <span style="width:8px;height:8px;border-radius:50%;background:${ZONE_COLORS[CITIES[c].zone]};display:inline-block;flex-shrink:0"></span>
+      ${c}
+    </div>`).join('');
+  sugg.style.display='block';
+}
+function selectCity(which,city){
+  document.getElementById('opt-'+which).value=city;
+  document.getElementById('sugg-'+which).style.display='none';
+  if(which==='origin') originLatLng=[CITIES[city].lat,CITIES[city].lng];
+  else destLatLng=[CITIES[city].lat,CITIES[city].lng];
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.input-pos')) document.querySelectorAll('.suggestions').forEach(s=>s.style.display='none');
+});
+
+/* ═══════════════════════════════════
+   GEOCODE via Nominatim (free)
+═══════════════════════════════════ */
+async function geocode(q){
+  const m=CITY_NAMES.find(c=>c.toLowerCase()===q.toLowerCase());
+  if(m) return[CITIES[m].lat,CITIES[m].lng];
+  try{
+    const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q+', India')}&format=json&limit=1`,{headers:{'User-Agent':'AI-Logistics/1.0'}});
+    const d=await r.json();
+    if(d.length) return[parseFloat(d[0].lat),parseFloat(d[0].lon)];
+  }catch(e){}
+  return null;
+}
+
+/* ═══════════════════════════════════
+   ROUTE OPTIMIZER  (OSRM free routing)
+═══════════════════════════════════ */
+async function runOptimize(){
+  const oTxt=document.getElementById('opt-origin').value.trim();
+  const dTxt=document.getElementById('opt-dest').value.trim();
+  if(!oTxt||!dTxt){alert('Please enter both origin and destination');return;}
+  const btn=document.getElementById('btn-opt');
+  btn.disabled=true; btn.textContent='CALCULATING...';
+
+  if(!originLatLng) originLatLng=await geocode(oTxt);
+  if(!destLatLng)   destLatLng=await geocode(dTxt);
+  if(!originLatLng||!destLatLng){
+    btn.disabled=false;btn.textContent='OPTIMIZE ROUTE →';
+    alert('Could not find location. Please select from the dropdown suggestions.');
+    return;
+  }
+
+  // Clear old layers
+  activeRouteLayers.forEach(l=>mapOpt.removeLayer(l));
+  activeRouteLayers=[];
+
+  // Draw traffic first (underneath routes)
+  drawTrafficOnOptimizer();
+
+  // Fetch from OSRM (free)
+  const showAlts=document.getElementById('opt-alts').checked;
+  const url=`https://router.project-osrm.org/route/v1/driving/${originLatLng[1]},${originLatLng[0]};${destLatLng[1]},${destLatLng[0]}?overview=full&geometries=geojson&alternatives=${showAlts?'3':'false'}&steps=true`;
+
+  let routes=[];
+  try{
+    const res=await fetch(url);
+    const data=await res.json();
+    if(data.code==='Ok') routes=data.routes;
+  }catch(e){console.error('OSRM:',e);}
+
+  btn.disabled=false; btn.textContent='OPTIMIZE ROUTE →';
+
+  if(!routes.length){alert('Could not calculate route. Try selecting cities from dropdown.');return;}
+
+  currentRoutes=routes;
+
+  // Draw animated origin/dest markers
+  addAnimatedMarker(mapOpt,originLatLng,'#00e5ff',oTxt,'📍 Origin');
+  addAnimatedMarker(mapOpt,destLatLng,'#ff5252',dTxt,'🏁 Destination');
+
+  // Draw alt routes first (index 1+), best route last (on top)
+  for(let i=routes.length-1;i>=0;i--) drawRoute(routes[i],i,i===0);
+
+  buildRouteCards(routes);
+  showSummary(routes[0],routes.length);
+
+  // Check traffic alerts
+  checkTrafficAlert(oTxt,dTxt);
+
+  // Fit bounds
+  const bounds=L.latLngBounds([originLatLng,destLatLng]);
+  routes.forEach(r=>r.geometry.coordinates.forEach(([lg,lt])=>bounds.extend([lt,lg])));
+  mapOpt.fitBounds(bounds,{padding:[50,50]});
+  document.getElementById('opt-hint').style.display='none';
+}
+
+function drawRoute(route,idx,isBest){
+  const cfg=ROUTE_CFG[idx]||ROUTE_CFG[ROUTE_CFG.length-1];
+  const coords=route.geometry.coordinates.map(([lng,lat])=>[lat,lng]);
+
+  // Shadow/glow effect for best route
+  if(isBest){
+    const shadow=L.polyline(coords,{color:'rgba(26,115,232,0.25)',weight:16,opacity:1}).addTo(mapOpt);
+    activeRouteLayers.push(shadow);
+  }
+
+  const poly=L.polyline(coords,{
+    color:cfg.color, weight:cfg.weight, opacity:cfg.opacity,
+    zIndexOffset:isBest?1000:idx*10
+  }).addTo(mapOpt);
+
+  poly.bindTooltip(`
+    <div style="font-family:'Exo 2',sans-serif">
+      <b style="color:${cfg.color}">${cfg.label}</b><br>
+      ${fmtDist(route.distance)} · ${fmtDur(route.duration)}<br>
+      <span style="font-size:10px;color:#9aa0a6">${isBest?'✅ Fastest — AI recommended':'Click to select this route'}</span>
+    </div>`,{sticky:true});
+
+  poly.on('click',()=>{
+    selectRoute(idx);
+  });
+  activeRouteLayers.push(poly);
+}
+
+function selectRoute(idx){
+  selectedRouteIdx=idx;
+  // Re-draw all routes with new selection highlighted
+  const routes=currentRoutes;
+  activeRouteLayers.forEach(l=>mapOpt.removeLayer(l));
+  activeRouteLayers=[];
+  const o=document.getElementById('opt-origin').value;
+  const d=document.getElementById('opt-dest').value;
+  addAnimatedMarker(mapOpt,originLatLng,'#00e5ff',o,'📍 Origin');
+  addAnimatedMarker(mapOpt,destLatLng,'#ff5252',d,'🏁 Destination');
+  for(let i=routes.length-1;i>=0;i--) drawRoute(routes[i],i,i===idx);
+  document.querySelectorAll('.rcard').forEach((c,i)=>{
+    c.className='rcard '+(i===idx?ROUTE_CFG[0].cls:(ROUTE_CFG[i]||ROUTE_CFG[ROUTE_CFG.length-1]).cls);
+    c.classList.toggle('best',i===idx);
+  });
+  showSummary(routes[idx],routes.length);
+}
+
+/* Animated pulsing marker for origin/dest */
+function addAnimatedMarker(map,pos,color,label,type){
+  const html=`
+    <div style="position:relative;width:24px;height:24px">
+      <div style="position:absolute;inset:0;background:${color};border-radius:50%;opacity:0.3;animation:vehiclePulse 1.5s infinite"></div>
+      <div style="position:absolute;inset:3px;background:${color};border-radius:50%;border:2px solid #fff"></div>
+    </div>`;
+  const marker=L.marker(pos,{
+    icon:L.divIcon({className:'',html,iconSize:[24,24],iconAnchor:[12,12]})
+  }).addTo(map);
+  marker.bindPopup(`<b style="color:#e8f4fd">${type}: ${label}</b>`);
+  activeRouteLayers.push(marker);
+}
+
+function checkTrafficAlert(origin,dest){
+  const isPeak=getTrafficLevel();
+  const alertBox=document.getElementById('traffic-alert-box');
+  const alertMsg=document.getElementById('traffic-alert-msg');
+  if(isPeak){
+    alertBox.style.display='flex';
+    alertMsg.textContent=`Peak hour traffic detected on ${origin}→${dest}. Alternate routes recommended. Red dashed lines show congestion zones.`;
+    document.getElementById('res-traffic-status').innerHTML='<span style="color:var(--red)">⚠ Heavy traffic — alternate routes shown</span>';
+  } else {
+    alertBox.style.display='none';
+    document.getElementById('res-traffic-status').innerHTML='<span style="color:var(--green)">✅ Traffic normal</span>';
+  }
+}
+
+/* ═══════════════════════════════════
+   ROUTE CARDS
+═══════════════════════════════════ */
+function buildRouteCards(routes){
+  const container=document.getElementById('route-cards');
+  container.innerHTML=routes.map((r,i)=>{
+    const cfg=ROUTE_CFG[i]||ROUTE_CFG[ROUTE_CFG.length-1];
+    const isPeak=getTrafficLevel();
+    const hasTraffic=isPeak&&i===0;
+    return `
+    <div class="rcard ${i===0?'best':cfg.cls}" id="rcard-${i}" onclick="selectRoute(${i})">
+      <div class="rcdot" style="background:${cfg.color};border-color:${cfg.color}"></div>
+      <div class="rc-info">
+        <div class="rc-label">${cfg.label}</div>
+        <div class="rc-stats">${fmtDist(r.distance)} · via road network</div>
+        ${hasTraffic?'<span class="traffic-warn-tag">⚠ Traffic on this route — click alternate</span>':''}
+      </div>
+      <div>
+        <div class="rc-time" style="color:${cfg.color}">${fmtDur(r.duration)}</div>
+        ${i===0?'<span class="best-tag">BEST</span>':''}
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('route-cards-wrap').style.display='block';
+}
+
+function showSummary(route,nRoutes){
+  document.getElementById('res-algo').textContent=document.getElementById('opt-algo').value==='astar'?'A* AI Heuristic':'Dijkstra';
+  document.getElementById('res-dist').textContent=fmtDist(route.distance);
+  document.getElementById('res-time').textContent=fmtDur(route.duration);
+  document.getElementById('res-nroutes').textContent=nRoutes+' routes found';
+  const steps=route.legs&&route.legs[0]?route.legs[0].steps:[];
+  document.getElementById('res-steps').innerHTML=steps.slice(0,8).map(s=>{
+    const txt=s.name||s.maneuver?.type||'Continue on road';
+    return `<div class="step-chip">${txt} <span style="color:var(--accent)">${fmtDist(s.distance)}</span></div>`;
+  }).join('')||'<div class="step-chip">Route calculated via OSRM</div>';
+  document.getElementById('opt-result').style.display='block';
+}
+
+/* ═══════════════════════════════════
+   VEHICLE TRACKER  ← CORE NEW FEATURE
+   Real-time animated vehicle movement
+═══════════════════════════════════ */
+function buildVehicleList(){
+  const list=document.getElementById('vehicle-list');
+  list.innerHTML=VEHICLE_DATA.map((v,i)=>`
+    <div class="v-item ${selectedVehicle===i?'active':''}" id="vitem-${i}" onclick="selectVehicle(${i})">
+      <div class="v-item-top">
+        <span class="v-id">${v.id}</span>
+        <span class="status-dot sd-${v.status}"></span>
+      </div>
+      <div class="v-loc">📍 ${v.from} → ${v.to}</div>
+      <div class="v-speed">${v.status==='active'?`🚀 ${v.speed} km/h · Fuel: ${v.fuel}%`:`Status: ${v.status.toUpperCase()}`}</div>
+      <div class="v-progress">
+        <div class="v-progress-bar" id="vpb-${i}" style="width:${v.progress}%;background:${v.status==='active'?'var(--accent)':v.status==='idle'?'var(--warn)':'var(--red)'}"></div>
+      </div>
+    </div>`).join('');
+}
+
+function selectVehicle(idx){
+  selectedVehicle=idx;
+  document.querySelectorAll('.v-item').forEach((el,i)=>el.classList.toggle('active',i===idx));
+  const v=VEHICLE_DATA[idx];
+  document.getElementById('vehicle-stats').innerHTML=`
+    <div class="result-box">
+      <div class="rr"><span class="rk">Vehicle ID</span><span class="rv ac">${v.id}</span></div>
+      <div class="rr"><span class="rk">Type</span><span class="rv">${v.type}</span></div>
+      <div class="rr"><span class="rk">Status</span><span class="rv" style="color:${v.status==='active'?'var(--green)':v.status==='idle'?'var(--warn)':'var(--red)'}">${v.status.toUpperCase()}</span></div>
+      <div class="rr"><span class="rk">Route</span><span class="rv">${v.from} → ${v.to}</span></div>
+      <div class="rr"><span class="rk">Current Speed</span><span class="rv ac">${v.speed} km/h</span></div>
+      <div class="rr"><span class="rk">Fuel Level</span><span class="rv" style="color:${v.fuel>50?'var(--green)':v.fuel>25?'var(--warn)':'var(--red)'}">${v.fuel}%</span></div>
+      <div class="rr"><span class="rk">Load</span><span class="rv">${v.load}%</span></div>
+      <div class="rr"><span class="rk">Trip Progress</span><span class="rv gr">${Math.round(v.progress)}%</span></div>
+    </div>`;
+  document.getElementById('tracker-status').textContent=`Tracking: ${v.id} (${v.from} → ${v.to})`;
+  // Pan map to vehicle
+  if(CITIES[v.from]){
+    const pos=interpolatePos(v.from,v.to,v.progress/100);
+    mapTrack.setView(pos,7);
+  }
+}
+
+/* Interpolate position between two cities based on progress 0–1 */
+function interpolatePos(from,to,t){
+  const cf=CITIES[from]||CITIES['Mumbai'];
+  const ct=CITIES[to]||CITIES['Delhi'];
+  return[cf.lat+(ct.lat-cf.lat)*t, cf.lng+(ct.lng-cf.lng)*t];
+}
+
+/* Start live tracking animation */
+function startTrackerAnimation(){
+  if(trackerInterval) clearInterval(trackerInterval);
+
+  // Draw route paths for all active vehicles
+  Object.values(vehicleRouteLines).forEach(l=>mapTrack.removeLayer(l));
+  vehicleRouteLines={};
+
+  VEHICLE_DATA.forEach((v,i)=>{
+    if(v.status==='active'&&CITIES[v.from]&&CITIES[v.to]){
+      const cf=CITIES[v.from],ct=CITIES[v.to];
+      const line=L.polyline([[cf.lat,cf.lng],[ct.lat,ct.lng]],{
+        color:'rgba(0,229,255,0.25)',weight:2,dashArray:'6,4'
+      }).addTo(mapTrack);
+      vehicleRouteLines[v.id]=line;
+      // Add origin/dest markers
+      L.circleMarker([cf.lat,cf.lng],{radius:5,fillColor:ZONE_COLORS[CITIES[v.from].zone]||'#00e5ff',color:'#fff',weight:1.5,fillOpacity:0.8}).addTo(mapTrack).bindTooltip(v.from);
+      L.circleMarker([ct.lat,ct.lng],{radius:5,fillColor:'#ff5252',color:'#fff',weight:1.5,fillOpacity:0.8}).addTo(mapTrack).bindTooltip(v.to);
+    }
+  });
+
+  // Create vehicle markers
+  Object.values(vehicleMarkers).forEach(m=>mapTrack.removeLayer(m));
+  vehicleMarkers={};
+  VEHICLE_DATA.forEach((v,i)=>{
+    if(!CITIES[v.from]) return;
+    const pos=interpolatePos(v.from,v.to,v.progress/100);
+    const color=v.status==='active'?'#00e676':v.status==='idle'?'#ffab00':'#ff5252';
+    const html=`
+      <div style="position:relative;width:22px;height:22px">
+        <div style="position:absolute;inset:0;background:${color};border-radius:50%;opacity:0.35;animation:vehiclePulse ${1+Math.random()*0.5}s infinite ${Math.random()*0.5}s"></div>
+        <div style="position:absolute;inset:3px;background:${color};border-radius:50%;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:7px">🚛</div>
+      </div>`;
+    const marker=L.marker(pos,{
+      icon:L.divIcon({className:'',html,iconSize:[22,22],iconAnchor:[11,11]})
+    }).addTo(mapTrack);
+    marker.bindPopup(`
+      <div style="font-family:'Exo 2',sans-serif">
+        <b style="color:#e8f4fd">${v.id}</b><br>
+        <span style="color:${color}">${v.status.toUpperCase()}</span><br>
+        ${v.from} → ${v.to}<br>
+        Speed: ${v.speed} km/h<br>
+        Progress: ${Math.round(v.progress)}%
+      </div>`);
+    vehicleMarkers[v.id]=marker;
+  });
+
+  document.getElementById('btn-stop-track').style.display='block';
+
+  // Animate every 800ms
+  trackerInterval=setInterval(()=>{
+    VEHICLE_DATA.forEach((v,i)=>{
+      if(v.status!=='active') return;
+      // Advance progress
+      v.progress=Math.min(100,v.progress+(Math.random()*0.8+0.3));
+      if(v.progress>=100){
+        // Reset journey
+        const tmp=v.from; v.from=v.to; v.to=tmp;
+        v.progress=0;
+      }
+      // Update marker position
+      if(vehicleMarkers[v.id]){
+        const pos=interpolatePos(v.from,v.to,v.progress/100);
+        vehicleMarkers[v.id].setLatLng(pos);
+        vehicleMarkers[v.id]._popup?.setContent(`
+          <div style="font-family:'Exo 2',sans-serif">
+            <b style="color:#e8f4fd">${v.id}</b><br>
+            <span style="color:#00e676">ACTIVE — MOVING</span><br>
+            ${v.from} → ${v.to}<br>
+            Speed: ${v.speed} km/h<br>
+            Progress: ${Math.round(v.progress)}%
+          </div>`);
+      }
+      // Update progress bar
+      const pb=document.getElementById('vpb-'+i);
+      if(pb) pb.style.width=v.progress+'%';
+    });
+    // Update selected vehicle stats
+    if(selectedVehicle!==null) selectVehicle(selectedVehicle);
+  },800);
+}
+
+function trackAllVehicles(){
+  startTrackerAnimation();
+  // Fit map to show all vehicles
+  const bounds=L.latLngBounds(VEHICLE_DATA.filter(v=>CITIES[v.from]).map(v=>[CITIES[v.from].lat,CITIES[v.from].lng]));
+  mapTrack.fitBounds(bounds,{padding:[40,40]});
+  document.getElementById('tracker-status').textContent='Tracking all '+VEHICLE_DATA.filter(v=>v.status==='active').length+' active vehicles';
+}
+
+function stopTracking(){
+  if(trackerInterval) clearInterval(trackerInterval);
+  trackerInterval=null;
+  document.getElementById('btn-stop-track').style.display='none';
+  document.getElementById('tracker-status').textContent='Tracking stopped';
+}
+
+/* ═══════════════════════════════════
+   FORMAT HELPERS
+═══════════════════════════════════ */
+function fmtDist(m){if(!m)return'—';return m>=1000?(m/1000).toFixed(1)+' km':Math.round(m)+' m';}
+function fmtDur(s){if(!s)return'—';const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return h>0?`${h}h ${m}m`:`${m} min`;}
+
+/* ═══════════════════════════════════
+   FLASK API
+═══════════════════════════════════ */
+async function loadDashboard(){
+  try{
+    const res=await fetch('/api/dashboard');
+    dashData=await res.json();
+    renderKPIs(dashData.kpis);
+    renderCharts(dashData);
+    renderFleet(dashData.fleet);
+    renderFleetCharts(dashData.fleet);
+    renderDemand(dashData.demand);
+    renderTrafficCharts(dashData.traffic);
+    document.getElementById('last-update').textContent='Updated: '+dashData.timestamp;
+  }catch(e){console.error(e);}
+}
+
+/* ═══════════════════════════════════
+   KPI CARDS
+═══════════════════════════════════ */
+function renderKPIs(k){
+  document.getElementById('kpi-grid').innerHTML=[
+    ['blue','TOTAL DELIVERIES',k.total_deliveries.toLocaleString(),'Today'],
+    ['green','ON-TIME RATE',k.on_time_pct+'%','Accuracy'],
+    ['blue','AVG ROUTE',k.avg_route_km+' km','Per trip'],
+    ['green','FUEL SAVED',k.fuel_saved_pct+'%','vs unoptimized'],
+    ['warn','COST SAVED','₹'+(k.cost_saved_inr/1000).toFixed(0)+'K','AI savings'],
+    ['blue','ACTIVE VEHICLES',k.active_vehicles,'On road'],
+    ['warn','PENDING ORDERS',k.pending_orders,'Dispatching'],
+    ['red','ALERTS',k.alerts,'Attention'],
+  ].map(([c,l,v,s],i)=>`
+    <div class="kpi-card ${c}" style="animation-delay:${i*.05}s">
+      <div class="kpi-label">${l}</div>
+      <div class="kpi-val">${v}</div>
+      <div class="kpi-sub">${s}</div>
+    </div>`).join('');
+}
+
+/* ═══════════════════════════════════
+   CHARTS
+═══════════════════════════════════ */
+function mk(id,cfg){
+  if(charts[id]) charts[id].destroy();
+  const c=document.getElementById(id);
+  if(c) charts[id]=new Chart(c,cfg);
+}
+const xT={color:'#5c7a99',font:{size:10}},yT={color:'#5c7a99',font:{size:10}},gl={color:'rgba(255,255,255,0.03)'};
+
+function renderCharts(d){
+  const h=d.historical;
+  mk('chart-deliveries',{type:'line',data:{labels:h.days,datasets:[{data:h.deliveries,borderColor:'#00e5ff',backgroundColor:'rgba(0,229,255,0.06)',fill:true,tension:0.4,pointRadius:3,pointBackgroundColor:'#00e5ff',borderWidth:2,label:'Deliveries'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{...xT,maxTicksLimit:7},grid:gl},y:{ticks:yT,grid:gl}}}});
+  mk('chart-cost',{type:'bar',data:{labels:h.days,datasets:[{label:'Cost ₹',data:h.costs,backgroundColor:'rgba(255,82,82,0.4)',borderColor:'#ff5252',borderWidth:1,yAxisID:'y'},{label:'Fuel %',data:h.fuel_efficiency,type:'line',borderColor:'#00e676',backgroundColor:'transparent',pointRadius:3,tension:0.4,borderWidth:2,yAxisID:'y1'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#5c7a99',font:{size:10},boxWidth:10}}},scales:{x:{ticks:{...xT,maxTicksLimit:7},grid:{display:false}},y:{ticks:yT,grid:gl},y1:{position:'right',ticks:{color:'#00e676',font:{size:10}},grid:{display:false}}}}});
+  const zones={west:0,north:0,south:0,east:0,central:0};
+  Object.values(d.cities).forEach(c=>zones[c.zone]++);
+  mk('chart-zone',{type:'doughnut',data:{labels:['West','North','South','East','Central'],datasets:[{data:Object.values(zones),backgroundColor:['#00e5ff','#00e676','#ffab00','#ce93d8','#ff5252'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'right',labels:{color:'#5c7a99',font:{size:10},boxWidth:10,padding:8}}}}});
+}
+
+function renderFleetCharts(fleet){
+  const ty={},st={};
+  fleet.forEach(v=>{ty[v.type]=(ty[v.type]||0)+1;st[v.status]=(st[v.status]||0)+1;});
+  mk('chart-fleet-type',{type:'pie',data:{labels:Object.keys(ty),datasets:[{data:Object.values(ty),backgroundColor:['#00e5ff','#00e676','#ffab00'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#5c7a99',font:{size:11},padding:10}}}}});
+  mk('chart-fleet-status',{type:'doughnut',data:{labels:Object.keys(st).map(s=>s.toUpperCase()),datasets:[{data:Object.values(st),backgroundColor:['#00e676','#ffab00','#ff5252'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{labels:{color:'#5c7a99',font:{size:11},padding:10}}}}});
+}
+
+function renderTrafficCharts(traffic){
+  const cnt={low:0,moderate:0,high:0,severe:0};
+  traffic.forEach(t=>cnt[t.traffic]++);
+  mk('chart-traffic-pie',{type:'doughnut',data:{labels:['Low','Moderate','High','Severe'],datasets:[{data:Object.values(cnt),backgroundColor:['#00e676','#ffab00','#ff5252','#ce93d8'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{labels:{color:'#5c7a99',font:{size:11},padding:10}}}}});
+  const top=[...traffic].sort((a,b)=>b.delay_pct-a.delay_pct).slice(0,10);
+  mk('chart-traffic-bar',{type:'bar',data:{labels:top.map(t=>`${t.from.slice(0,3)}→${t.to.slice(0,3)}`),datasets:[{label:'Delay %',data:top.map(t=>t.delay_pct),backgroundColor:top.map(t=>t.traffic==='severe'?'#ce93d8':t.traffic==='high'?'#ff5252':t.traffic==='moderate'?'#ffab00':'#00e676'),borderWidth:0,borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:xT,grid:gl},y:{ticks:{...yT,font:{size:9}},grid:{display:false}}}}});
+}
+
+function renderFleet(fleet){
+  const c=document.getElementById('fleet-container');
+  if(!fleet?.length){c.innerHTML='<div class="loading">No data</div>';return;}
+  let h=`<div style="overflow-x:auto"><table class="fleet-table"><thead><tr><th>ID</th><th>TYPE</th><th>LOCATION</th><th>LOAD</th><th>STATUS</th><th>FUEL</th><th>TRIPS</th></tr></thead><tbody>`;
+  fleet.forEach(v=>{
+    const fc=v.fuel_pct>60?'#00e676':v.fuel_pct>30?'#ffab00':'#ff5252';
+    const lc=v.load_pct>80?'#ff5252':v.load_pct>50?'#ffab00':'#00e5ff';
+    h+=`<tr>
+      <td style="font-family:var(--font-head);font-size:11px;color:var(--accent)">${v.id}</td>
+      <td>${v.type}</td><td>${v.location}</td>
+      <td>${v.load_kg.toLocaleString()}/${v.capacity_kg.toLocaleString()} kg
+        <div style="width:60px;height:3px;background:var(--surface2);border-radius:2px;margin-top:3px;overflow:hidden"><div style="width:${v.load_pct}%;height:100%;background:${lc};border-radius:2px"></div></div></td>
+      <td><span class="sb s-${v.status}">${v.status.toUpperCase()}</span></td>
+      <td>${v.fuel_pct}%<div style="width:44px;height:3px;background:var(--surface2);border-radius:2px;display:inline-block;vertical-align:middle;margin-left:4px;overflow:hidden"><div style="width:${v.fuel_pct}%;height:100%;background:${fc};border-radius:2px"></div></div></td>
+      <td style="text-align:center">${v.trips_today}</td>
+    </tr>`;
+  });
+  c.innerHTML=h+'</tbody></table></div>';
+}
+
+function renderDemand(demand){
+  document.getElementById('demand-grid').innerHTML=Object.keys(demand).map(city=>{
+    const d=demand[city],ti=d.trend==='up'?'▲':d.trend==='down'?'▼':'●';
+    return `<div class="demand-card"><div class="demand-city">${city}</div><div class="demand-val">${d.demand}</div>
+      <div class="demand-meta"><span class="trend-${d.trend}">${ti} ${d.trend}</span><span>Tomorrow: ${d.next_day}</span><span>${Math.round(d.confidence*100)}% conf</span></div></div>`;
+  }).join('');
+  const sorted=Object.keys(demand).sort((a,b)=>demand[b].demand-demand[a].demand).slice(0,15);
+  mk('chart-demand-bar',{type:'bar',data:{labels:sorted,datasets:[
+    {label:'Today',data:sorted.map(c=>demand[c].demand),backgroundColor:'rgba(0,229,255,0.55)',borderColor:'#00e5ff',borderWidth:1},
+    {label:'Tomorrow',data:sorted.map(c=>demand[c].next_day),backgroundColor:'rgba(0,230,118,0.4)',borderColor:'#00e676',borderWidth:1}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#5c7a99',font:{size:10},boxWidth:10}}},scales:{x:{ticks:xT,grid:{display:false}},y:{ticks:yT,grid:gl}}}});
+}
+
+/* ═══════════════════════════════════
+   STARTUP
+═══════════════════════════════════ */
+window.addEventListener('load',()=>{
+  initMaps();
+  buildVehicleList();
+  loadDashboard();
+  setInterval(loadDashboard,30000);
+  // Auto-start tracker animation after maps load
+  setTimeout(()=>{
+    trackAllVehicles();
+  },1500);
+});
+</script>
+</body>
+</html>
